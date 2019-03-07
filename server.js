@@ -9,10 +9,17 @@ import compress from 'compression';
 import 'colors';
 import opn from 'opn';
 import request from 'request';
-const app = express();
+let app = express();
 
 const isProduction = process.env.NODE_ENV === 'production';
 const port = process.env.PORT || 9000;
+const sslPort = process.env.SSLPORT || 9443;
+const domainName = process.env.DOMAINNAME || 'localhost';
+const adminEmail = process.env.ADMINEMAIL || 'example@example.com';
+
+const baseURL = isProduction ? 
+  'https://' + domainName + ':' + sslPort + '/' :
+  'http://' + domainName + ':' + port + '/';
 
 process.on('uncaughtException', function (error) {
   console.error('Uncaught error : ', error);
@@ -58,22 +65,42 @@ process.on('uncaughtException', function (error) {
     if ((ext === '' || ext === '.html') && req.url !== '/') {
       console.info('returning the index.html here');
       console.info(req.url);
-      console.info(`http://localhost:${port}/`);
-      req.pipe(request(`http://localhost:${port}/`)).pipe(res);
+      console.info(baseURL);
+      req.pipe(request(baseURL)).pipe(res);
     } else {
       next();
     }
   });
 
-  app.listen(port, function () {
+  if (isProduction) {
+    app = require('greenlock-express')
+      .create({
+        email: adminEmail,
+        servername: domainName,
+        agreeTos: true,
+        configDir: '~/.config/acme/',
+        app: app,
+    })
+  }
+
+  function appListenSuccess() {
     console.log('╔═══════════════════════════════════════════════════════════'.green.bold);
     console.log('║ Background Geolocation Server | port: %s'.green.bold, port);
+    if (isProduction) {
+      console.log('║                               | sslPort: %s'.green.bold, sslPort);
+    }
     console.log('╚═══════════════════════════════════════════════════════════'.green.bold);
 
     // Spawning dedicated process on opened port.. only if not deployed on heroku
     if (!process.env.DYNO) {
-      opn(`http://localhost:${port}`)
+      opn(baseURL)
         .catch(function (error) { console.log("Optional site open failed:", error); });
     }
-  });
+  }
+
+  if (isProduction) {
+    app.listen(port, sslPort, appListenSuccess);
+  } else {
+    app.listen(port, appListenSuccess);
+  }
 })();
