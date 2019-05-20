@@ -80,6 +80,8 @@ process.on('uncaughtException', function (error) {
         agreeTos: true,
         configDir: '~/.config/acme/',
         app: app,
+        store: require('greenlock-store-fs'),
+        webrootPath: '/home/mike/kscore-api/public',
     })
   }
 
